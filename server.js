@@ -1,5 +1,6 @@
 require('dotenv').config();
 require('console-stamp')(console, 'yyyy-mm-dd HH:MM:ss.l');
+var unirest = require('unirest');
 const util = require('util')
 
 var Buffer = require('buffer').Buffer;
@@ -15,6 +16,8 @@ var ARDUINO_PORT = process.env.ARDUINO_PORT;
 //THIS NODEJS UDP SERVER 
 var SERVER_IP = process.env.SERVER_IP; 
 var SERVER_PORT = process.env.SERVER_PORT; 
+
+var SLACK_ENDPOINT = process.env.SLACK_ENDPOINT; 
 
 var udpServer = dgram.createSocket('udp4');
  
@@ -39,6 +42,13 @@ wss.on('connection', function(ws) {
                     console.log("[MIDDLEWARE] MOVEMENT STOPPED => " + msg.toString());
                 } else if (type=='magnet' && state==true){
                     console.log("[MIDDLEWARE] MAGNET DETECTED => " + msg.toString());
+                    
+                    unirest.post(SLACK_ENDPOINT)
+                    .header('Content-type', 'application/json')
+                    .send({ "text": "Magnetic field found - Coordinates:  71,1 94.4"  })
+                    .end(function (response) {
+                    
+            });
                 } else if (type=='magnet' && state==false){
                     console.log("[MIDDLEWARE] MAGNET GONE => " + msg.toString());
                 }
@@ -48,16 +58,24 @@ wss.on('connection', function(ws) {
         });
 wss.on('connection', function(ws) {
     var udpClient = dgram.createSocket('udp4');
+    
     //When a message is received from ws client send it to udp server.
     ws.on('message', function(message) {
         var msgBuff = new Buffer(message);
 
         if(msgBuff=='G') {
-            console.log("[MIDDLEWARE] GO SIGNAL RECEIVED");
-        } else if(msgBuff=='S') {
-            console.log("[MIDDLEWARE] STOP SIGNAL RECEIVED");
-        }
+            console.log("[MIDDLEWARE] RUNNING");           
 
+        } else if(msgBuff=='S') {
+            console.log("[MIDDLEWARE] JAMMED");
+
+            unirest.post(SLACK_ENDPOINT)
+            .header('Content-type', 'application/json')
+            .send({ "text": "Machine HALTED - Human in danger" })
+            .end(function (response) {
+            console.log(response.body);
+            });
+        }
         udpClient.send(msgBuff, 0, msgBuff.length, ARDUINO_PORT, ARDUINO_IP);
     });
 });
